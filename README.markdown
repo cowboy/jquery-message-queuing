@@ -3,7 +3,7 @@
 
 Version: 1.0, Last updated: 1/5/2010
 
-With jQuery Message Queuing, you can process and manage large queues of items or elements serially. You can throttle a large number of commands or requests, giving each request some breathing room. You can also force multiple asynchronous requests to execute serially.
+With jQuery Message Queuing, you can process and manage operations on large queues of items or elements. You can throttle, giving each operation a little breathing room (firing tracking pixels, performing DOM manipulations). You can force multiple asynchronous operations to execute serially (AJAX requests). You can also get some quantity of JavaScript ducks, put them in a boat, in a line, and have them fight loudly over who gets to use the oars.
 
 Visit the [project page](http://benalman.com/projects/jquery-message-queuing-plugin/) for more information and usage examples!
 

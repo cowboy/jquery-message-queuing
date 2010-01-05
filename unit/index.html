@@ -1,0 +1,446 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+        "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="en">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <title>jQuery Message Queuing - Unit Tests</title>
+
+<!--<script type="text/javascript" src="../shared/jquery-1.3.2.js"></script>-->
+<script type="text/javascript" src="../shared/jquery-1.4a2.js"></script>
+<script type="text/javascript" src="testrunner.js"></script>
+<link rel="stylesheet" href="testsuite.css">
+
+<script type="text/javascript" src="../jquery.ba-jqmq.js"></script>
+<script type="text/javascript" language="javascript">
+<!--
+$(function(){ // START CLOSURE
+
+module( 'jQuery.jqmq' );
+
+test( 'batch = 1, delay > 0', function() {
+  expect( 9 );
+  
+  var q,
+    arr,
+    arr_expect,
+    step = 0,
+    steps = [
+      function() {
+        arr_expect = [0, "x", 0, "y", 1, 2];
+        stop();
+        q = $.jqmq({ queue: [ 0, 1, 2 ], delay: 10, callback: callback, complete: complete });
+        q.add( 'x', true );
+      },
+      function() {
+        arr_expect = [1, 2, 3, [4, 5]];
+        q.addEach([ 1, 2, 3 ]);
+        q.add([ 4, 5 ]);
+        equals( q.indexOf( 1 ), -1, 'first `batch` items are processed synchronously, indexOf' );
+        equals( q.indexOf( 3 ), 1, 'first `batch` items are processed synchronously, indexOf' );
+      },
+      function() {
+        arr_expect = [1, 5, 3, 4, 2];
+        q.addEach([ 1, 2 ]);
+        q.addEach( [ 3, 4 ], true );
+        q.add( 5, true );
+      },
+      function() {
+        arr_expect = [5, 3, 4, 1, 2];
+        q.pause();
+        q.addEach([ 1, 2 ]);
+        q.addEach( [ 3, 4 ], true );
+        q.add( 5, true );
+        equals( q.indexOf( 5 ), 0, 'queue not yet running, indexOf' );
+        q.start();
+        equals( q.indexOf( 5 ), -1, 'first `batch` items are processed synchronously, indexOf' );
+      },
+      function() {
+        arr_expect = [1, 4, 5];
+        q.addEach([ 1, 2, 3 ]);
+        q.clear();
+        q.addEach([ 4, 5 ]);
+      }
+    ];
+  
+  function complete() {
+    same( arr, arr_expect, 'expected queue processing order' );
+    setTimeout( next, 10 );
+  };
+  
+  function callback( item ) {
+    arr.push( item );
+    if ( item === 0 && arr.length == 1 ) {
+      this.add( 'y', true );
+      return true;
+    }
+  };
+  
+  function next() {
+    arr = [];
+    var func = steps[ step++ ];
+    func ? func() : start();
+  };
+  
+  next();
+  
+});
+
+test( 'batch > 1, delay > 0', function() {
+  expect( 18 );
+  
+  var q,
+    arr,
+    arr_expect,
+    step = 0,
+    steps = [
+      function() {
+        stop();
+        
+        arr_expect = [0, 1, "x", 0, 1, "y", 2, 3, 4];
+        
+        q = $.jqmq({ queue: [ 0, 1, 2, 3, 4 ], delay: 10, batch: 2, callback: callback, complete: complete });
+        q.add( 'x', true );
+      },
+      function() {
+        arr_expect = [1, 2, 3, [4, 5]];
+        
+        equals( q.size(), 0, 'queue empty, size' );
+        q.addEach([ 1, 2, 3 ]);
+        equals( q.size(), 1, 'first `batch` items are processed synchronously, size' );
+        q.add([ 4, 5 ]);
+      },
+      function() {
+        arr_expect = [1, 2, 6, 4, 5, 3];
+        
+        q.addEach([ 1, 2, 3 ]);
+        equals( q.size(), 1, 'first `batch` items are processed synchronously, size' );
+        q.addEach( [ 4, 5 ], true );
+        q.add( 6, true );
+        equals( q.size(), 4, 'ONLY first `batch` items are processed synchronously, size' );
+      },
+      function() {
+        arr_expect = [6, 4, 5, 1, 2, 3];
+        
+        q.pause();
+        q.addEach([ 1, 2, 3 ]);
+        q.addEach( [ 4, 5 ], true );
+        q.add( 6, true );
+        equals( q.size(), 6, 'queue not yet running, size' );
+        q.start();
+        equals( q.size(), 4, 'first `batch` items are processed synchronously, size' );
+      },
+      function() {
+        arr_expect = [1, 2, 4, 5];
+        
+        q.addEach([ 1, 2, 3 ]);
+        equals( q.size(), 1, 'first `batch` items are processed synchronously, size' );
+        q.clear();
+        equals( q.size(), 0, 'queue cleared, size' );
+        q.addEach([ 4, 5 ]);
+        equals( q.size(), 0, 'first `batch` items are processed synchronously, size' );
+      },
+      function() {
+        q.update({ batch: 3 });
+        
+        arr_expect = [1, 2, 3, 6, 7];
+        
+        q.addEach([ 1, 2, 3, 4, 5 ]);
+        equals( q.size(), 2, 'first `batch` items are processed synchronously, size' );
+        q.clear();
+        equals( q.size(), 0, 'queue cleared, size' );
+        q.addEach([ 6, 7 ]);
+        equals( q.size(), 0, 'first `batch` items are processed synchronously, size' );
+      }
+    ];
+  
+  function complete() {
+    same( arr, arr_expect, 'expected queue processing order' );
+    setTimeout( next, 10 );
+  };
+  
+  function callback( items ) {
+    arr = arr.concat( items );
+    if ( arr[0] === 0 && arr.length == 2 ) {
+      this.add( 'y', true );
+      return true;
+    }
+  };
+  
+  function next() {
+    arr = [];
+    var func = steps[ step++ ];
+    func ? func() : start();
+  };
+  
+  next();
+  
+});
+
+test( 'batch = 1, delay = -1', function() {
+  expect( 9 );
+  
+  var q,
+    arr,
+    arr_expect,
+    step = 0,
+    steps = [
+      function() {
+        arr_expect = [0, 0, "x", "y", 1, 2];
+        stop();
+        q = $.jqmq({ queue: [ 0, 1, 2 ], delay: -1, callback: callback, complete: complete });
+        q.add( 'x', true );
+      },
+      function() {
+        arr_expect = [1, 2, 3, [4, 5]];
+        q.addEach([ 1, 2, 3 ]);
+        q.add([ 4, 5 ]);
+        equals( q.indexOf( 1 ), -1, 'first `batch` items are processed synchronously, indexOf' );
+        equals( q.indexOf( 3 ), 1, 'first `batch` items are processed synchronously, indexOf' );
+      },
+      function() {
+        arr_expect = [1, 5, 3, 4, 2];
+        q.addEach([ 1, 2 ]);
+        q.addEach( [ 3, 4 ], true );
+        q.add( 5, true );
+      },
+      function() {
+        arr_expect = [5, 3, 4, 1, 2];
+        q.pause();
+        q.addEach([ 1, 2 ]);
+        q.addEach( [ 3, 4 ], true );
+        q.add( 5, true );
+        equals( q.indexOf( 5 ), 0, 'queue not yet running, indexOf' );
+        q.start();
+        equals( q.indexOf( 5 ), -1, 'first `batch` items are processed synchronously, indexOf' );
+      },
+      function() {
+        arr_expect = [1, 4, 5];
+        q.addEach([ 1, 2, 3 ]);
+        q.clear();
+        q.addEach([ 4, 5 ]);
+      }
+    ];
+  
+  function complete() {
+    same( arr, arr_expect, 'expected queue processing order' );
+    setTimeout( next, 10 );
+  };
+  
+  function callback( item ) {
+    arr.push( item );
+    if ( item === 0 && arr.length == 1 ) {
+      this.add( 'y', true );
+      setTimeout( function(){ q.next( true ); }, 10 );
+    } else {
+      setTimeout( function(){ q.next(); }, 10 );
+    }
+  };
+  
+  function next() {
+    arr = [];
+    var func = steps[ step++ ];
+    func ? func() : start();
+  };
+  
+  next();
+  
+});
+
+test( 'batch > 1, delay = -1', function() {
+  expect( 18 );
+  
+  var q,
+    arr,
+    arr_expect,
+    step = 0,
+    steps = [
+      function() {
+        stop();
+        
+        arr_expect = [0, 1, 0, 1, "x", "y", 2, 3, 4];
+        
+        q = $.jqmq({ queue: [ 0, 1, 2, 3, 4 ], delay: -1, batch: 2, callback: callback, complete: complete });
+        q.add( 'x', true );
+      },
+      function() {
+        arr_expect = [1, 2, 3, [4, 5]];
+        
+        equals( q.size(), 0, 'queue empty, size' );
+        q.addEach([ 1, 2, 3 ]);
+        equals( q.size(), 1, 'first `batch` items are processed synchronously, size' );
+        q.add([ 4, 5 ]);
+      },
+      function() {
+        arr_expect = [1, 2, 6, 4, 5, 3];
+        
+        q.addEach([ 1, 2, 3 ]);
+        equals( q.size(), 1, 'first `batch` items are processed synchronously, size' );
+        q.addEach( [ 4, 5 ], true );
+        q.add( 6, true );
+        equals( q.size(), 4, 'ONLY first `batch` items are processed synchronously, size' );
+      },
+      function() {
+        arr_expect = [6, 4, 5, 1, 2, 3];
+        
+        q.pause();
+        q.addEach([ 1, 2, 3 ]);
+        q.addEach( [ 4, 5 ], true );
+        q.add( 6, true );
+        equals( q.size(), 6, 'queue not yet running, size' );
+        q.start();
+        equals( q.size(), 4, 'first `batch` items are processed synchronously, size' );
+      },
+      function() {
+        arr_expect = [1, 2, 4, 5];
+        
+        q.addEach([ 1, 2, 3 ]);
+        equals( q.size(), 1, 'first `batch` items are processed synchronously, size' );
+        q.clear();
+        equals( q.size(), 0, 'queue cleared, size' );
+        q.addEach([ 4, 5 ]);
+        equals( q.size(), 0, 'first `batch` items are processed synchronously, size' );
+      },
+      function() {
+        q.update({ batch: 3 });
+        
+        arr_expect = [1, 2, 3, 6, 7];
+        
+        q.addEach([ 1, 2, 3, 4, 5 ]);
+        equals( q.size(), 2, 'first `batch` items are processed synchronously, size' );
+        q.clear();
+        equals( q.size(), 0, 'queue cleared, size' );
+        q.addEach([ 6, 7 ]);
+        equals( q.size(), 0, 'first `batch` items are processed synchronously, size' );
+      }
+    ];
+  
+  function complete() {
+    same( arr, arr_expect, 'expected queue processing order' );
+    setTimeout( next, 10 );
+  };
+  
+  function callback( items ) {
+    arr = arr.concat( items );
+    if ( arr[0] === 0 && arr.length == 2 ) {
+      this.add( 'y', true );
+      setTimeout( function(){ q.next( true ); }, 10 );
+    } else {
+      setTimeout( function(){ q.next(); }, 10 );
+    }
+  };
+  
+  function next() {
+    arr = [];
+    var func = steps[ step++ ];
+    func ? func() : start();
+  };
+  
+  next();
+  
+});
+
+test( '$.fn.jqmqAdd, $.fn.jqmqAddEach', function() {
+  expect( 9 );
+  
+  var q,
+    arr,
+    arr_expect,
+    step = 0,
+    steps = [
+      function() {
+        arr_expect = [0, "x", 0, "y", 1, 2];
+        stop();
+        q = $.jqmq({ delay: 10, callback: callback, complete: complete });
+        $('#foo0, #foo1, #foo2').jqmqAddEach( q );
+        $('#foox').jqmqAdd( q, true );
+      },
+      function() {
+        arr_expect = [1, 2, 3, [4, 5]];
+        
+        $('#foo1, #foo2, #foo3').jqmqAddEach( q );
+        $('#foo4, #foo5').jqmqAdd( q );
+        equals( q.indexOf( $('#foo1')[0] ), -1, 'first `batch` items are processed synchronously, indexOf' );
+        equals( q.indexOf( $('#foo3')[0] ), 1, 'first `batch` items are processed synchronously, indexOf' );
+      },
+      function() {
+        arr_expect = [1, 5, 3, 4, 2];
+        $('#foo1, #foo2').jqmqAddEach( q );
+        $('#foo3, #foo4').jqmqAddEach( q, true );
+        $('#foo5').jqmqAdd( q, true );
+      },
+      function() {
+        arr_expect = [5, 3, 4, 1, 2];
+        q.pause();
+        $('#foo1, #foo2').jqmqAddEach( q );
+        $('#foo3, #foo4').jqmqAddEach( q, true );
+        $('#foo5').jqmqAddEach( q, true );
+        equals( q.indexOf( $('#foo5')[0] ), 0, 'queue not yet running, indexOf' );
+        q.start();
+        equals( q.indexOf( $('#foo5')[0] ), -1, 'first `batch` items are processed synchronously, indexOf' );
+      },
+      function() {
+        arr_expect = [1, 4, 5];
+        $('#foo1, #foo2, #foo3').jqmqAddEach( q );
+        q.clear();
+        $('#foo4, #foo5').jqmqAddEach( q );
+      }
+    ];
+  
+  function complete() {
+    same( arr, arr_expect, 'expected queue processing order' );
+    setTimeout( next, 10 );
+  };
+  
+  function num_or_val( val ) {
+    return isNaN( +val ) ? val : +val;
+  }
+  
+  function callback( elem ) {
+    var that = $(elem),
+      val = that.length === 1
+        ? num_or_val( that.text() )
+        : $.map( that.get(), function(v) { return num_or_val( $(v).text() ); } );
+    
+    arr.push( val );
+    if ( val === 0 && arr.length == 1 ) {
+      $('#fooy').jqmqAdd( this, true );
+      return true;
+    }
+  };
+  
+  function next() {
+    arr = [];
+    var func = steps[ step++ ];
+    func ? func() : start();
+  };
+  
+  next();
+  
+});
+
+}); // END CLOSURE
+//-->
+</script>
+</head>
+<body>
+
+<h1>jQuery Message Queuing - Unit Tests (<a href="http://benalman.com/projects/jquery-message-queuing-plugin/">Project Home</a>)</h1>
+<h2 id="banner"></h2>
+<h2 id="userAgent"></h2>
+
+<ol id="tests"></ol>
+<div id="main"></div>
+
+<div id="foo" style="display:none;">
+  <span id="foo0">0</span>
+  <span id="foo1">1</span>
+  <span id="foo2">2</span>
+  <span id="foo3">3</span>
+  <span id="foo4">4</span>
+  <span id="foo5">5</span>
+  <span id="foox">x</span>
+  <span id="fooy">y</span>
+</div>
+
+</body>
+</html>
